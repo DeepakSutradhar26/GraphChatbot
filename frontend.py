@@ -1,5 +1,5 @@
 import streamlit as st
-from backend import chatbot
+from backend import chatbot, retrieve_all_threads
 from langchain_core.messages import HumanMessage
 import uuid
 
@@ -14,8 +14,8 @@ def reset_chat():
     st.session_state['message_history'] = []
 
 def add_thread(thread_id):
-    if thread_id not in st.session_state['cheat_threads']:
-        st.session_state['cheat_threads'].append(thread_id)
+    if thread_id not in st.session_state['chat_threads']:
+        st.session_state['chat_threads'].add(thread_id)
 
 def load_conversation(thread_id):
     state = chatbot.get_state({'configurable': {'thread_id': thread_id}})
@@ -29,8 +29,8 @@ if 'message_history' not in st.session_state:
 if 'thread_id' not in st.session_state:
     st.session_state['thread_id'] = generate_thread_id()
 
-if 'cheat_threads' not in st.session_state:
-    st.session_state['cheat_threads'] = []
+if 'chat_threads' not in st.session_state:
+    st.session_state['chat_threads'] = retrieve_all_threads()
 
 add_thread(st.session_state['thread_id'])
 
@@ -43,7 +43,7 @@ if st.sidebar.button('New Chat'):
 
 st.sidebar.header('My Conversations')
 
-for thread_id in st.session_state['cheat_threads']:
+for thread_id in st.session_state['chat_threads']:
     if st.sidebar.button(str(thread_id)):
         st.session_state['thread_id'] = thread_id
         messages = load_conversation(thread_id)
