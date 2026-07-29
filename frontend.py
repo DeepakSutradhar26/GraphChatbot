@@ -15,11 +15,12 @@ def reset_chat():
 
 def add_thread(thread_id):
     if thread_id not in st.session_state['chat_threads']:
-        st.session_state['chat_threads'].add(thread_id)
+        st.session_state['chat_threads'].append(thread_id)
 
 def load_conversation(thread_id):
-    state = chatbot.get_state({'configurable': {'thread_id': thread_id}})
-    return state.values.get('messages', [])
+    state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
+    # Check if messages key exists in state values, return empty list if not
+    return state.values.get("messages", [])
 
 # *************** Streamlit App ***************
 
@@ -58,7 +59,6 @@ for thread_id in st.session_state['chat_threads']:
 
         st.session_state['message_history'] = temp_messages
 
-
 # **************** Main Chat UI ****************
 
 for message in st.session_state['message_history']:
@@ -82,8 +82,8 @@ if user_input:
     }
 
     with st.chat_message('assistant'): 
-        def ai_only_stream():
-            for message_chunk, _ in chatbot.stream(
+        async def ai_only_stream():
+            async for message_chunk, _ in chatbot.astream(
                 {'messages': [HumanMessage(content=user_input)]},
                 CONFIG,
                 stream_mode = 'messages'

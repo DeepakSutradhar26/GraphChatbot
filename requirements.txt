@@ -2,8 +2,10 @@ langgraph
 langchain
 langchain-core
 langchain-groq
-langchain_community
+langchain-community
+langchain-mcp-adapters
 dotenv
 streamlit
 langsmith
 ddgs
+fastmcp
