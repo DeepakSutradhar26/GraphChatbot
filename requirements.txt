@@ -4,8 +4,14 @@ langchain-core
 langchain-groq
 langchain-community
 langchain-mcp-adapters
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
 dotenv
 streamlit
 langsmith
 ddgs
 fastmcp
+pypdf
+faiss-cpu
+torchvision

@@ -1,5 +1,6 @@
 import streamlit as st
-from backend import chatbot, retrieve_all_threads
+from backend import ingest_pdf
+from backend import chatbot, retrieve_all_threads, submit_async_task
 from langchain_core.messages import HumanMessage, AIMessage
 import uuid
 
@@ -33,14 +34,46 @@ if 'thread_id' not in st.session_state:
 if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = retrieve_all_threads()
 
+if 'ingested_docs' not in st.session_state:
+    st.session_state['ingested_docs'] = {}
+
 add_thread(st.session_state['thread_id'])
+
+thread_key = str(st.session_state['thread_id'])
+thread_docs = st.session_state['ingested_docs'].setdefault(thread_key, {})
+threads = st.session_state['chat_threads'][::-1]
+selected_thread = None
 
 # **************** Sidebar UI****************
 
 st.sidebar.title("GraphChatbot")
 
-if st.sidebar.button('New Chat'):
+if st.sidebar.button('New Chat', use_container_width=True):
     reset_chat()
+    st.rerun()
+
+if thread_docs:
+    latest_doc = list(thread_docs.values())[-1]
+    st.sidebar.success(
+        f"Using `{latest_doc.get('filename')}` "
+        f"({latest_doc.get('chunks')} chunks from {latest_doc.get('documents')} pages)"
+    )
+else:
+    st.sidebar.info("No PDF indexed yet.")
+
+uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
+if uploaded_pdf:
+    if uploaded_pdf.name in thread_docs:
+        st.sidebar.info(f"`{uploaded_pdf.name}` already processed for this chat.")
+    else:
+        with st.sidebar.status("Indexing PDF…", expanded=True) as status_box:
+            summary = ingest_pdf(
+                uploaded_pdf.getvalue(),
+                thread_id=thread_key,
+                filename=uploaded_pdf.name,
+            )
+            thread_docs[uploaded_pdf.name] = summary
+            status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
 
 st.sidebar.header('My Conversations')
 
@@ -82,15 +115,31 @@ if user_input:
     }
 
     with st.chat_message('assistant'): 
-        async def ai_only_stream():
-            async for message_chunk, _ in chatbot.astream(
-                {'messages': [HumanMessage(content=user_input)]},
-                CONFIG,
-                stream_mode = 'messages'
-            ): 
-                if isinstance(message_chunk, AIMessage):
-                    yield message_chunk.content
+        import queue
+        _q = queue.Queue()
+        _SENTINEL = object()
 
-        ai_message = st.write_stream(ai_only_stream())
+        async def _ai_only_stream():
+            try:
+                async for message_chunk, _ in chatbot.astream(
+                    {'messages': [HumanMessage(content=user_input)]},
+                    CONFIG,
+                    stream_mode='messages'
+                ):
+                    if isinstance(message_chunk, AIMessage):
+                        _q.put(message_chunk.content)
+            finally:
+                _q.put(_SENTINEL)
+
+        submit_async_task(_ai_only_stream())
+
+        def _sync_stream():
+            while True:
+                item = _q.get()
+                if item is _SENTINEL:
+                    break
+                yield item
+
+        ai_message = st.write_stream(_sync_stream())
 
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
